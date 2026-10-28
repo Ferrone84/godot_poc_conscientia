@@ -700,4 +700,5 @@ func _find_ally(char_id: String) -> Combatant:
 
 
 func _wait(seconds: float) -> void:
-	await get_tree().create_timer(seconds).timeout
+	# process_always = false : les attentes se figent quand le menu Options met le jeu en pause.
+	await get_tree().create_timer(seconds, false).timeout

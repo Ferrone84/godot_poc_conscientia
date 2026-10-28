@@ -22,6 +22,7 @@ var _banner: Label
 var _end_panel: PanelContainer
 var _end_title: Label
 var _end_sub: Label
+var _options: OptionsMenu
 
 var _allies: Array = []
 var _enemies: Array = []
@@ -47,6 +48,14 @@ func setup(allies: Array, enemies: Array) -> void:
 	qte = QteOverlay.new()
 	_root.add_child(qte)
 	_build_end()
+	_options = OptionsMenu.new()
+	_options.closed.connect(_on_options_closed)
+	_root.add_child(_options)
+
+
+func _on_options_closed() -> void:
+	if _action_panel.visible:
+		_focus_first()
 
 
 func _process(_delta: float) -> void:
@@ -67,9 +76,13 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _action_panel.visible and event.is_action_pressed("ui_cancel") and _back.is_valid():
+	if not event.is_action_pressed("ui_cancel") or _end_panel.visible:
+		return
+	if _action_panel.visible and _back.is_valid():
 		_back.call()
-		get_viewport().set_input_as_handled()
+	else:
+		_options.open()
+	get_viewport().set_input_as_handled()
 
 
 # --- API utilisée par le combat ---------------------------------------------
@@ -126,6 +139,8 @@ func show_end(victory: bool, turns: int) -> void:
 	_end_sub.text = ("Le Médian de Gavillon se dissout dans le bruit de fond du Plan de la Conscience." if victory
 		else "La peur de Gavillon a eu raison de l'équipe.") + "\n%d tours joués." % turns
 	_end_panel.visible = true
+	_end_panel.reset_size()
+	_end_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
 	var btn := _end_panel.find_child("Rejouer", true, false) as Button
 	btn.grab_focus()
 
@@ -380,7 +395,7 @@ func _build_banner_and_hint() -> void:
 	hint.offset_top = -26
 	hint.offset_bottom = -6
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	hint.text = "Défense : [E] Parer · [Espace] Esquiver     Attaque : [Espace] au bon moment     Menu : flèches, Entrée, Échap"
+	hint.text = "Défense : [E] Parer · [Espace] Esquiver     Attaque : [Espace] au bon moment     Menu : flèches, Entrée, Échap     Options : Échap · Plein écran : F11"
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8, 0.8))
 	_root.add_child(hint)
@@ -402,6 +417,7 @@ func _build_end() -> void:
 	_end_sub = Label.new()
 	_end_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_end_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_end_sub.custom_minimum_size = Vector2(500, 0)  # sans largeur, le retour à la ligne gonfle la hauteur
 	vb.add_child(_end_sub)
 	var btn := Button.new()
 	btn.name = "Rejouer"
@@ -446,21 +462,22 @@ func _make_theme() -> Theme:
 		"disabled": Color(0.07, 0.07, 0.09, 0.8),
 		"focus": Color(0, 0, 0, 0),
 	}
-	for s in states:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = states[s]
-		sb.set_corner_radius_all(3)
-		sb.content_margin_left = 12
-		sb.content_margin_right = 12
-		if s == "focus":
-			sb.draw_center = false
-			sb.border_color = GOLD
-			sb.set_border_width_all(2)
-		th.set_stylebox(s, "Button", sb)
-	th.set_color("font_color", "Button", Color(0.93, 0.9, 0.84))
-	th.set_color("font_hover_color", "Button", Color.WHITE)
-	th.set_color("font_focus_color", "Button", Color.WHITE)
-	th.set_color("font_disabled_color", "Button", Color(0.45, 0.45, 0.5))
-	th.set_font_size("font_size", "Button", 15)
+	for type in ["Button", "OptionButton"]:
+		for s in states:
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = states[s]
+			sb.set_corner_radius_all(3)
+			sb.content_margin_left = 12
+			sb.content_margin_right = 12
+			if s == "focus":
+				sb.draw_center = false
+				sb.border_color = GOLD
+				sb.set_border_width_all(2)
+			th.set_stylebox(s, type, sb)
+		th.set_color("font_color", type, Color(0.93, 0.9, 0.84))
+		th.set_color("font_hover_color", type, Color.WHITE)
+		th.set_color("font_focus_color", type, Color.WHITE)
+		th.set_color("font_disabled_color", type, Color(0.45, 0.45, 0.5))
+		th.set_font_size("font_size", type, 15)
 	th.set_font_size("font_size", "Label", 14)
 	return th
