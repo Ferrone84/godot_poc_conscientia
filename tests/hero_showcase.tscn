@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cfmty3i01hbf5"]
+
+[ext_resource type="Script" uid="uid://2seu8mc8qutw" path="res://tests/hero_showcase.gd" id="1_show"]
+
+[node name="HeroShowcase" type="Node3D" unique_id=214988115]
+script = ExtResource("1_show")

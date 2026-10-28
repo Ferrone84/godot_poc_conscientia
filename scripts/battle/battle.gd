@@ -512,6 +512,7 @@ func _enemy_aoe(e: Combatant, pat: Dictionary) -> void:
 
 func _on_parry(a: Combatant, e: Combatant) -> void:
 	var mid := a.body_pos().lerp(e.body_pos(), 0.35)
+	a.anim("parry")
 	CsFlux.burst(self, mid, "joie", 0.5)
 	CsFlux.burst(self, mid, a.emotion, 0.4)
 	_gain_pa(a)
@@ -535,9 +536,12 @@ func _strike(user: Combatant, target: Combatant, power: float, heavy := false) -
 	if target.dead:
 		return 0.0
 	var raw := user.atk * power * user.dmg_dealt_mult() * randf_range(0.92, 1.08)
+	user.anim("attack")
 	var lunge := user.create_tween()
 	lunge.tween_property(user.model, "position:z", -0.35, 0.06)
 	lunge.tween_property(user.model, "position:z", 0.0, 0.18)
+	if user.is_ally:
+		await _wait(0.1)  # l'arme s'abat avant l'impact
 	var dealt := _apply_damage(target, raw * target.dmg_taken_mult())
 	CsFlux.burst(self, target.body_pos(), user.emotion, 1.4 if heavy else 0.8)
 	target.flinch(target.global_position - user.global_position)
@@ -615,7 +619,9 @@ func _clock_skill_shift(n: Combatant, amount: int) -> void:
 func _attack_qte(user: Combatant, target: Combatant, world_anchor := Vector3.INF) -> String:
 	CsFlux.burst(self, user.body_pos(), user.emotion, 0.5)
 	var anchor := target.body_pos() if world_anchor == Vector3.INF else world_anchor + Vector3(0, 1.0, 0)
-	var r := await qte.run_attack(_screen(anchor), randf_range(0.75, 0.95), Emotions.color(user.emotion))
+	var duration := randf_range(0.75, 0.95)
+	user.anim("charge", duration)
+	var r := await qte.run_attack(_screen(anchor), duration, Emotions.color(user.emotion))
 	return r
 
 
@@ -647,6 +653,7 @@ func _move(c: Combatant, dest: Vector3, duration: float) -> void:
 
 
 func _projectile(from: Combatant, to: Combatant, emotion: String) -> void:
+	from.anim("cast")
 	var tw := CsFlux.projectile(self, from.body_pos(), to.body_pos(), emotion, 0.32)
 	await tw.finished
 

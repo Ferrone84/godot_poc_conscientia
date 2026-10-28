@@ -57,13 +57,17 @@ func setup(char_id: String, ally: bool, suffix := "") -> void:
 	speed = data["speed"]
 	emotion = data["emotion"]
 	next_time = 100.0 / speed
-	model = Node3D.new()
+	if is_ally:
+		var hero := HeroModel.new()
+		hero.build(id)
+		model = hero
+		head_height = hero.head_height
+		_clock_hand = hero.clock_hand
+	else:
+		model = Node3D.new()
 	add_child(model)
 	_build_ring()
 	match id:
-		"ceran": _build_ceran()
-		"lucie": _build_lucie()
-		"nicolas": _build_nicolas()
 		"altere": _build_altere()
 		"veilleur": _build_veilleur()
 	if not is_ally:
@@ -225,10 +229,19 @@ func set_highlight(mode: String) -> void:
 			_ring_mat.albedo_color = Color(2.5, 0.6, 0.3, 0.95) if not is_ally else Color(0.5, 2.5, 0.9, 0.95)
 
 
+## Joue une animation du modèle articulé (héros seulement ; sans effet sur les ennemis).
+## anim : charge | attack | cast | hit | parry. duration : maintien de la pose "charge".
+func anim(anim_name: String, duration := 0.0) -> void:
+	if model is HeroModel:
+		(model as HeroModel).play(anim_name, duration)
+
+
 func flinch(from_dir: Vector3) -> void:
+	anim("hit")
 	var back := from_dir.normalized() * 0.25
+	var squash := Vector3(1.05, 0.95, 1.05) if is_ally else Vector3(1.12, 0.88, 1.12)
 	var tw := create_tween()
-	tw.tween_property(model, "scale", Vector3(1.12, 0.88, 1.12), 0.06)
+	tw.tween_property(model, "scale", squash, 0.06)
 	tw.parallel().tween_property(model, "position:x", back.x, 0.06)
 	tw.parallel().tween_property(model, "position:z", back.z, 0.06)
 	tw.tween_property(model, "scale", Vector3.ONE, 0.18).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
@@ -262,91 +275,8 @@ func _build_ring() -> void:
 	add_child(_ring)
 
 
-# Les modèles regardent vers -Z (convention look_at de Godot).
-
-func _build_ceran() -> void:
-	var navy := Color(0.09, 0.11, 0.2)
-	var violet := Emotions.color("crainte")
-	_part(_capsule(0.17, 0.9), _mat(Color(0.06, 0.06, 0.08)), Vector3(0, 0.45, 0))
-	_part(_cylinder(0.2, 0.34, 0.95), _mat(navy), Vector3(0, 0.78, 0))
-	_part(_cylinder(0.24, 0.2, 0.32), _mat(navy.lightened(0.1)), Vector3(0, 1.22, 0))
-	_part(_torus(0.12, 0.2), _mat(Color(0.85, 0.82, 0.75)), Vector3(0, 1.38, 0))
-	_part(_torus(0.25, 0.3), _glow(violet, 2.5), Vector3(0, 0.95, 0), Vector3.ZERO, Vector3(1, 0.6, 1))
-	_part(_sphere(0.16), _mat(Color(0.88, 0.72, 0.62)), Vector3(0, 1.55, 0))
-	_part(_sphere(0.17), _mat(Color(0.18, 0.12, 0.08)), Vector3(0, 1.62, 0.03), Vector3.ZERO, Vector3(1.05, 0.75, 1.05))
-	_part(_box(Vector3(0.03, 0.95, 0.07)), _mat(Color(0.8, 0.82, 0.88), 0.25, 0.9), Vector3(0.3, 0.78, -0.2), Vector3(-25, 0, 8))
-	_part(_box(Vector3(0.2, 0.03, 0.06)), _mat(Color(0.7, 0.55, 0.25), 0.4, 0.8), Vector3(0.28, 0.36, -0.03), Vector3(-25, 0, 8))
-	# Fragments d'espace en orbite.
-	var orbit := Node3D.new()
-	orbit.position.y = 1.0
-	model.add_child(orbit)
-	for i in 3:
-		var a := TAU * i / 3.0
-		var cube := _part(_box(Vector3(0.09, 0.09, 0.09)), _glow(violet, 4.0), Vector3(cos(a) * 0.55, 0.15 * i, sin(a) * 0.55), Vector3(45, 45, 0))
-		model.remove_child(cube)
-		orbit.add_child(cube)
-	_spinners.append(orbit)
-	head_height = 1.6
-
-
-func _build_lucie() -> void:
-	var white := Color(0.88, 0.87, 0.84)
-	var rose := Emotions.color("amour")
-	_part(_capsule(0.16, 0.85), _mat(Color(0.2, 0.16, 0.16)), Vector3(0, 0.43, 0))
-	_part(_cylinder(0.19, 0.38, 1.0), _mat(white), Vector3(0, 0.75, 0))
-	_part(_cylinder(0.22, 0.19, 0.3), _mat(white.darkened(0.05)), Vector3(0, 1.2, 0))
-	_part(_box(Vector3(0.05, 0.22, 0.02)), _glow(Color(0.9, 0.15, 0.2), 1.5), Vector3(0, 1.2, -0.21))
-	_part(_box(Vector3(0.18, 0.05, 0.02)), _glow(Color(0.9, 0.15, 0.2), 1.5), Vector3(0, 1.23, -0.21))
-	_part(_torus(0.14, 0.22), _mat(Color(0.55, 0.12, 0.18)), Vector3(0, 1.36, 0))
-	_part(_sphere(0.15), _mat(Color(0.92, 0.76, 0.66)), Vector3(0, 1.52, 0))
-	_part(_capsule(0.16, 0.6), _mat(Color(0.5, 0.2, 0.1)), Vector3(0, 1.42, 0.08), Vector3(12, 0, 0))
-	_part(_sphere(0.17), _mat(Color(0.5, 0.2, 0.1)), Vector3(0, 1.6, 0.02), Vector3.ZERO, Vector3(1.05, 0.8, 1.05))
-	var orb := _part(_sphere(0.09), _glow(rose, 4.0), Vector3(0.32, 0.95, -0.22))
-	CsFlux.aura(orb, Vector3.ZERO, "amour", 0.25)
-	head_height = 1.55
-
-
-func _build_nicolas() -> void:
-	var brown := Color(0.32, 0.2, 0.11)
-	var brass := Color(0.85, 0.62, 0.25)
-	var gold := Emotions.color("joie")
-	_part(_capsule(0.17, 0.9), _mat(Color(0.12, 0.1, 0.09)), Vector3(0, 0.45, 0))
-	_part(_cylinder(0.21, 0.36, 1.0), _mat(brown), Vector3(0, 0.78, 0))
-	_part(_cylinder(0.25, 0.21, 0.3), _mat(brown.darkened(0.15)), Vector3(0, 1.24, 0))
-	_part(_box(Vector3(0.3, 0.06, 0.02)), _mat(brass, 0.3, 0.9), Vector3(0, 1.05, -0.3))
-	_part(_sphere(0.16), _mat(Color(0.85, 0.7, 0.58)), Vector3(0, 1.55, 0))
-	_part(_cylinder(0.17, 0.18, 0.08), _mat(Color(0.1, 0.08, 0.06)), Vector3(0, 1.66, 0))
-	_part(_cylinder(0.11, 0.13, 0.26), _mat(Color(0.1, 0.08, 0.06)), Vector3(0, 1.8, 0))
-	_part(_torus(0.06, 0.09), _mat(brass, 0.3, 0.9), Vector3(-0.07, 1.6, -0.14), Vector3(90, 0, 0))
-	_part(_torus(0.06, 0.09), _mat(brass, 0.3, 0.9), Vector3(0.07, 1.6, -0.14), Vector3(90, 0, 0))
-	_part(_cylinder(0.02, 0.02, 1.0), _mat(Color(0.15, 0.1, 0.06)), Vector3(0.32, 0.55, -0.1), Vector3(0, 0, -6))
-	# Cadran d'horloge flottant dans son dos : l'aiguille suit sa jauge.
-	var dial := Node3D.new()
-	dial.position = Vector3(0, 2.05, 0.3)
-	dial.scale = Vector3.ONE * 0.6
-	model.add_child(dial)
-	var ring := MeshInstance3D.new()
-	ring.mesh = _torus(0.42, 0.47)
-	ring.material_override = _glow(gold, 2.2)
-	ring.rotation_degrees = Vector3(90, 0, 0)
-	dial.add_child(ring)
-	for i in 12:
-		var a := TAU * i / 12.0
-		var tick := MeshInstance3D.new()
-		tick.mesh = _box(Vector3(0.03, 0.08 if i % 3 == 0 else 0.04, 0.02))
-		tick.material_override = _glow(gold, 3.0 if i % 3 == 0 else 1.5)
-		tick.position = Vector3(sin(a) * 0.36, cos(a) * 0.36, 0)
-		tick.rotation.z = -a
-		dial.add_child(tick)
-	_clock_hand = Node3D.new()
-	dial.add_child(_clock_hand)
-	var hand := MeshInstance3D.new()
-	hand.mesh = _box(Vector3(0.035, 0.3, 0.02))
-	hand.material_override = _glow(Color(1, 0.95, 0.8), 4.0)
-	hand.position = Vector3(0, 0.15, 0)
-	_clock_hand.add_child(hand)
-	head_height = 1.6
-
+# Les modèles ennemis regardent vers -Z (convention look_at de Godot). Les héros
+# sont construits par HeroModel.
 
 func _build_altere() -> void:
 	var skin := Color(0.45, 0.37, 0.33)
