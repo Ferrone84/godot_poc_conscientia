@@ -6,6 +6,7 @@ extends Node3D
 ##   parer tous les coups d'une attaque déclenche une contre-attaque.
 ## Lancer avec `-- --autotest` pour un combat joué automatiquement (validation) ;
 ## ajouter `--fast` pour accélérer et `--qte-miss` pour rater tous les QTE.
+## `-- --demo` joue un combat scénarisé et sous-titré, à enregistrer en vidéo (voir DemoDirector).
 
 const PA_PER_TURN := 1
 const DEFAULT_LOOK := Vector3(0.8, 0.2, -0.6)  # doit correspondre au cadrage d'Arena
@@ -20,6 +21,7 @@ var env: Environment
 var current_time := 0.0
 var turn_count := 0
 var autotest := false
+var demo: DemoDirector
 
 var _last_breath_used := false
 var _over := false
@@ -32,6 +34,9 @@ var _shake := 0.0
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	autotest = "--autotest" in args
+	if "--demo" in args:
+		demo = DemoDirector.new()
+		seed(DemoDirector.SEED)
 	if "--fast" in args:
 		Engine.time_scale = 3.0
 	_setup_input()
@@ -40,13 +45,16 @@ func _ready() -> void:
 	env = world["environment"]
 	_cam_base_pos = camera.position
 	_spawn()
+	if demo:
+		_find_ally("nicolas").tokens = DemoDirector.NICOLAS_TOKENS
 	ui = BattleUI.new()
 	add_child(ui)
 	ui.setup(allies, enemies)
 	ui.restart_requested.connect(func() -> void: get_tree().reload_current_scene())
 	qte = ui.qte
-	qte.autoplay = autotest
+	qte.autoplay = autotest or demo != null
 	qte.autoplay_miss = "--qte-miss" in args
+	qte.demo = demo != null
 	_battle_loop()
 
 
@@ -98,9 +106,12 @@ func _spawn() -> void:
 
 func _battle_loop() -> void:
 	ui.set_timeline(_predict_order(9))
+	if demo:
+		await ui.title_card("CONSCIENTIA : APOSTOLI", "Proof of concept — combat au tour par tour avec QTE", 2.2)
 	await _wait(0.6)
 	ui.banner("Gavillon — un Médian de la Peur s'est éveillé", Emotions.core("peur"))
 	await _wait(1.4)
+	_demo_caption("intro")
 	while not _over:
 		var actor := _next_actor()
 		current_time = actor.next_time
@@ -120,7 +131,7 @@ func _battle_loop() -> void:
 		actor.next_time = current_time + 100.0 / actor.eff_speed()
 		if _check_end():
 			break
-		if autotest and turn_count > 400:
+		if (autotest or demo) and turn_count > 400:
 			print("AUTOTEST: ABANDON (trop de tours)")
 			get_tree().quit(1)
 			return
@@ -206,13 +217,35 @@ func _finish(victory: bool) -> void:
 			print("AUTOTEST: ANOMALIE victoire sans allié debout")
 		await _wait(2.0)
 		get_tree().quit()
+	elif demo:
+		print("DEMO: %s en %d tours" % ["VICTOIRE" if victory else "DEFAITE", turn_count])
+		await _wait(1.5)
+		_demo_caption("outro")
+		await _wait(4.5)
+		get_tree().quit()
+
+
+func _demo_caption(key: String) -> void:
+	if demo:
+		var text := demo.caption_once(key)
+		if text != "":
+			ui.caption(text)
 
 
 # --- Tour des alliés ----------------------------------------------------------
 
 func _ally_turn(a: Combatant) -> void:
 	var choice: Dictionary
-	if autotest:
+	if demo:
+		_demo_caption("hero_" + a.id)
+		var planned := demo.choose(a, allies, enemies)
+		print("DEMO: tour %d %s -> %s (%s)" % [turn_count, a.display_name, planned["skill"], (planned["target"] as Combatant).display_name])
+		if planned["skill"] == SkillDB.basic_attack(a.id):
+			_demo_caption("basic")
+		ui.show_actions(a)
+		ui.play_choice(planned["skill"], planned["target"])
+		choice = await ui.action_selected
+	elif autotest:
 		await _wait(0.4)
 		choice = _auto_choice(a)
 	else:
@@ -430,10 +463,14 @@ func _enemy_turn(e: Combatant) -> void:
 		func(p: Dictionary) -> bool: return not p.has("below_hp") or e.hp_ratio() < float(p["below_hp"]))
 	var pat: Dictionary = options.pick_random()
 	ui.banner("%s — %s" % [e.display_name, pat["name"]], Emotions.core(e.emotion))
+	if demo:
+		qte.demo_defense = demo.next_defense()
 	await _wait(0.5)
 	if pat.get("aoe", false):
+		_demo_caption("aoe")
 		await _enemy_aoe(e, pat)
 	else:
+		_demo_caption("defend")
 		var target: Combatant = _living(allies).pick_random()
 		await _enemy_combo(e, target, pat)
 
@@ -524,6 +561,7 @@ func _on_parry(a: Combatant, e: Combatant) -> void:
 func _counter(a: Combatant, e: Combatant) -> void:
 	ui.banner("Contre-attaque de %s !" % a.display_name, GOLD)
 	qte.popup("CONTRE !", _screen(a.head_pos()), GOLD, 38)
+	_demo_caption("counter")
 	await _wait(0.25)
 	await _strike(a, e, 1.5, true)
 	if a.id == "ceran":
@@ -621,6 +659,7 @@ func _attack_qte(user: Combatant, target: Combatant, world_anchor := Vector3.INF
 	var anchor := target.body_pos() if world_anchor == Vector3.INF else world_anchor + Vector3(0, 1.0, 0)
 	var duration := randf_range(0.75, 0.95)
 	user.anim("charge", duration)
+	_demo_caption("qte_attack")
 	var r := await qte.run_attack(_screen(anchor), duration, Emotions.color(user.emotion))
 	return r
 

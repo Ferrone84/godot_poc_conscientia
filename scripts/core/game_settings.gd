@@ -131,5 +131,7 @@ func _load() -> void:
 func _window_locked() -> bool:
 	if DisplayServer.get_name() == "headless" or is_embedded():
 		return true
+	if Engine.get_write_movie_path() != "":
+		return true
 	var args := OS.get_cmdline_args()
 	return "--write-movie" in args or "--resolution" in args

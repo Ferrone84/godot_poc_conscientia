@@ -21,6 +21,10 @@ const START_RADIUS := 150.0
 var autoplay := false
 ## En autotest, ne jamais réussir les QTE (pour tester les KO et la défaite).
 var autoplay_miss := false
+## Mode démo : attaques presque toujours parfaites, défense imposée par le
+## scénario ("parry", "dodge" ou "hit" pour encaisser).
+var demo := false
+var demo_defense := "parry"
 
 var _active := false
 var _mode := ""
@@ -63,7 +67,12 @@ func _start(mode: String, anchor: Vector2, duration: float, color: Color) -> voi
 	_t = 0.0
 	_result = ""
 	_active = true
-	if autoplay:
+	if autoplay and demo:
+		_auto_action = "attack" if mode == "attack" else demo_defense
+		_auto_time = duration + randf_range(-0.05, 0.09)
+		if _auto_action == "dodge":
+			_auto_time = duration + randf_range(-0.16, 0.0)
+	elif autoplay:
 		_auto_time = duration + randf_range(-0.14, 0.1)
 		if mode == "attack":
 			_auto_action = "attack"
@@ -74,7 +83,7 @@ func _start(mode: String, anchor: Vector2, duration: float, color: Color) -> voi
 func _process(delta: float) -> void:
 	if _active:
 		_t += delta
-		if autoplay and not autoplay_miss and _result == "" and _t >= _auto_time:
+		if autoplay and not autoplay_miss and _auto_action != "hit" and _result == "" and _t >= _auto_time:
 			_register(_auto_action)
 		var late := GOOD_WIN if _mode == "attack" else maxf(PARRY_WIN, DODGE_LATE)
 		if _t >= _dur + late or (_result != "" and _t >= _dur):

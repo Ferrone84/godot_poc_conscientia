@@ -26,6 +26,10 @@ window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[editor]
+
+movie_writer/mjpeg_quality=0.95
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

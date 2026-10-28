@@ -23,6 +23,9 @@ var _end_panel: PanelContainer
 var _end_title: Label
 var _end_sub: Label
 var _options: OptionsMenu
+var _caption_panel: PanelContainer
+var _caption_label: Label
+var _captions: Array[String] = []
 
 var _allies: Array = []
 var _enemies: Array = []
@@ -126,6 +129,86 @@ func show_actions(actor: Combatant) -> void:
 	_actor = actor
 	_action_panel.visible = true
 	_menu_root()
+
+
+## Mode démo : rejoue la navigation dans le menu comme le ferait un joueur
+## (le menu doit déjà être ouvert avec show_actions).
+func play_choice(skill_id: String, target: Combatant) -> void:
+	await _pause(0.6)
+	if skill_id == SkillDB.basic_attack(_actor.id):
+		await _press(0)
+	else:
+		await _press(1)
+		await _press(SkillDB.KITS[_actor.id].find(skill_id))
+	if SkillDB.needs_target(skill_id):
+		await _press(SkillDB.valid_targets(skill_id, _actor, _allies, _enemies).find(target))
+
+
+## Descend le menu bouton par bouton jusqu'à l'entrée voulue, puis la valide.
+func _press(index: int) -> void:
+	var buttons := _menu.get_children()
+	for i in index + 1:
+		var b := buttons[i] as Button
+		if b.disabled:
+			continue
+		b.grab_focus()
+		await _pause(0.22)
+	await _pause(0.3)
+	(buttons[index] as Button).pressed.emit()
+
+
+## Sous-titre explicatif (mode démo) ; les suivants attendent leur tour.
+func caption(text: String) -> void:
+	_captions.append(text)
+	if _captions.size() == 1:
+		_caption_loop()
+
+
+func _caption_loop() -> void:
+	while not _captions.is_empty():
+		_caption_label.text = _captions[0]
+		_caption_panel.reset_size()
+		_caption_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE)
+		_caption_panel.offset_top = 104
+		_caption_panel.offset_bottom = 104 + _caption_panel.size.y
+		var tw := _caption_panel.create_tween()
+		tw.tween_property(_caption_panel, "modulate:a", 1.0, 0.25)
+		tw.tween_interval(3.4)
+		tw.tween_property(_caption_panel, "modulate:a", 0.0, 0.3)
+		await tw.finished
+		_captions.pop_front()
+
+
+## Écran-titre en fondu (mode démo).
+func title_card(title: String, subtitle: String, seconds: float) -> void:
+	var veil := ColorRect.new()
+	veil.color = Color(0.02, 0.02, 0.04)
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.add_child(veil)
+	var vb := VBoxContainer.new()
+	vb.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 14)
+	veil.add_child(vb)
+	for entry in [[title, 54, GOLD], [subtitle, 20, Color(0.85, 0.85, 0.9)]]:
+		var l := Label.new()
+		l.text = entry[0]
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.add_theme_font_size_override("font_size", entry[1])
+		l.add_theme_color_override("font_color", entry[2])
+		vb.add_child(l)
+	vb.modulate.a = 0.0
+	var tw := veil.create_tween()
+	tw.tween_interval(0.4)
+	tw.tween_property(vb, "modulate:a", 1.0, 0.8)
+	tw.tween_interval(seconds)
+	tw.tween_property(veil, "modulate:a", 0.0, 1.0)
+	tw.tween_callback(veil.queue_free)
+	await tw.finished
+
+
+func _pause(seconds: float) -> void:
+	await get_tree().create_timer(seconds, false).timeout
 
 
 func hide_actions() -> void:
@@ -399,6 +482,27 @@ func _build_banner_and_hint() -> void:
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8, 0.8))
 	_root.add_child(hint)
+	_caption_panel = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.03, 0.06, 0.82)
+	sb.border_color = GOLD
+	sb.border_width_left = 3
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	_caption_panel.add_theme_stylebox_override("panel", sb)
+	_caption_label = Label.new()
+	_caption_label.add_theme_font_size_override("font_size", 17)
+	# Largeur bornée : le sous-titre ne doit pas déborder sur le panneau des ennemis.
+	_caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_caption_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_caption_label.custom_minimum_size = Vector2(560, 0)
+	_caption_panel.add_child(_caption_label)
+	_caption_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_caption_panel.modulate.a = 0.0
+	_root.add_child(_caption_panel)
 
 
 func _build_end() -> void:
