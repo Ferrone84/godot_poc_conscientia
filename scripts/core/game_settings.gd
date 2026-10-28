@@ -29,28 +29,51 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if is_embedded():
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F11:
 		window_mode = 0 if window_mode != 0 else 1
 		apply()
 		save()
 
 
-## Résolutions proposées : celles qui tiennent dans l'écran courant.
+## Résolutions proposées : celles qui tiennent dans l'écran, plus la résolution native.
 func available_resolutions() -> Array[Vector2i]:
 	var screen := DisplayServer.screen_get_size()
 	var out: Array[Vector2i] = []
 	for r in RESOLUTIONS:
 		if r.x <= screen.x and r.y <= screen.y:
 			out.append(r)
-	if out.is_empty():
-		out.append(RESOLUTIONS[0])
+	if not screen in out:
+		out.append(screen)
 	return out
+
+
+## Lancé avec F5 depuis l'éditeur, le jeu est intégré à l'onglet « Jeu » :
+## sa fenêtre ne peut alors ni changer de taille ni passer en plein écran.
+func is_embedded() -> bool:
+	return Engine.is_embedded_in_editor()
+
+
+## Taille de rendu réelle de la 3D. En plein écran, la fenêtre garde la taille
+## native de l'écran et la "résolution" choisie fixe la définition de la 3D.
+func render_size() -> Vector2i:
+	var win := get_window().size
+	return Vector2i(roundi(win.x * _effective_scale()), roundi(win.y * _effective_scale()))
+
+
+func _effective_scale() -> float:
+	var s := render_scale
+	if window_mode != 0 and not _window_locked():
+		var screen_h := DisplayServer.screen_get_size().y
+		s *= minf(1.0, float(resolution.y) / float(screen_h))
+	return s
 
 
 func apply() -> void:
 	var root := get_tree().root
 	root.scaling_3d_mode = [Viewport.SCALING_3D_MODE_BILINEAR, Viewport.SCALING_3D_MODE_FSR, Viewport.SCALING_3D_MODE_FSR2][upscaler]
-	root.scaling_3d_scale = render_scale
+	root.scaling_3d_scale = _effective_scale()
 	root.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X, Viewport.MSAA_8X][msaa]
 	root.content_scale_factor = ui_scale
 	if _window_locked():
@@ -103,10 +126,10 @@ func _load() -> void:
 	ui_scale = cfg.get_value("display", "ui_scale", ui_scale)
 
 
-## Pas de gestion de fenêtre en headless ni pendant un enregistrement vidéo
-## (--write-movie / --resolution imposent leur propre taille).
+## Pas de gestion de fenêtre en headless, intégré à l'éditeur, ni pendant un
+## enregistrement vidéo (--write-movie / --resolution imposent leur propre taille).
 func _window_locked() -> bool:
-	if DisplayServer.get_name() == "headless":
+	if DisplayServer.get_name() == "headless" or is_embedded():
 		return true
 	var args := OS.get_cmdline_args()
 	return "--write-movie" in args or "--resolution" in args

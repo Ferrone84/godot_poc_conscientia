@@ -44,7 +44,7 @@ func _ready() -> void:
 
 	_mode = _option(grid, "Mode d'affichage", GameSettings.WINDOW_MODES)
 	_mode.item_selected.connect(func(i: int) -> void: _apply_setting("window_mode", i))
-	_res = _option(grid, "Résolution (fenêtré)", [])
+	_res = _option(grid, "Résolution", [])
 	_res.item_selected.connect(func(i: int) -> void: _apply_setting("resolution", GameSettings.available_resolutions()[i]))
 	var scale_row := _slider(grid, "Échelle de rendu 3D", 0.5, 1.0, 0.05)
 	_scale = scale_row[0]
@@ -106,6 +106,10 @@ func _apply_setting(key: String, value: Variant) -> void:
 	GameSettings.set(key, value)
 	GameSettings.apply()
 	GameSettings.save()
+	# La fenêtre met quelques images à prendre sa nouvelle taille (plein écran).
+	for i in 3:
+		await get_tree().process_frame
+	_refresh()
 
 
 func _refresh() -> void:
@@ -122,18 +126,30 @@ func _refresh() -> void:
 		if r == GameSettings.resolution:
 			selected = i
 	_res.select(selected)
-	_res.disabled = GameSettings.window_mode != 0
+	var embedded := GameSettings.is_embedded()
+	_mode.disabled = embedded
+	_res.disabled = embedded
+	_vsync.disabled = embedded
 	_scale.value = GameSettings.render_scale
 	_scale_label.text = "%d %%" % roundi(GameSettings.render_scale * 100.0)
 	_upscaler.select(GameSettings.upscaler)
-	_upscaler.disabled = GameSettings.render_scale >= 1.0
+	var win := get_window().size
+	var r3d := GameSettings.render_size()
+	_upscaler.disabled = r3d == win
 	_msaa.select(GameSettings.msaa)
 	_vsync.button_pressed = GameSettings.vsync
 	_ui.value = GameSettings.ui_scale
 	_ui_label.text = "%d %%" % roundi(GameSettings.ui_scale * 100.0)
-	var win := get_window().size
-	var r3d := Vector2i(roundi(win.x * GameSettings.render_scale), roundi(win.y * GameSettings.render_scale))
-	_info.text = "Fenêtre : %d × %d — rendu 3D : %d × %d. F11 bascule le plein écran à tout moment." % [win.x, win.y, r3d.x, r3d.y]
+	if embedded:
+		_info.add_theme_color_override("font_color", Color(1.0, 0.7, 0.35))
+		_info.text = ("Le jeu est intégré à l'éditeur Godot (onglet « Jeu ») : il ne peut pas changer "
+			+ "sa propre fenêtre, donc le mode d'affichage et la résolution sont inactifs ici. "
+			+ "Pour les tester, décoche « Intégrer le jeu » dans l'onglet Jeu de l'éditeur, "
+			+ "ou lance le jeu hors de l'éditeur.\nRendu 3D actuel : %d × %d." % [r3d.x, r3d.y])
+	else:
+		_info.add_theme_color_override("font_color", Color(0.75, 0.78, 0.85))
+		var where := "Fenêtre" if GameSettings.window_mode == 0 else "Plein écran (taille native)"
+		_info.text = "%s : %d × %d — rendu 3D : %d × %d.\nEn plein écran, la résolution choisie fixe la définition de la 3D ; l'interface reste nette. F11 bascule le plein écran." % [where, win.x, win.y, r3d.x, r3d.y]
 	_refreshing = false
 
 
